@@ -1,3 +1,5 @@
+Disclaimer: absolutely everything in this project was created by an coding agent, including the prompt below, which it outputted after I asked it for a prompt to re-create something like this: https://exopriors.com/scry. The result is not super useful but still really impressive and good studying material.
+
 # Document Search System
 
 A document search system with semantic + lexical search using OpenAI embeddings and SQLite FTS5.
