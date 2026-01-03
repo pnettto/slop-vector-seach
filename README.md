@@ -1,4 +1,10 @@
-Disclaimer: absolutely everything in this project was created by an coding agent, including the prompt below, which it outputted after I asked it for a prompt to re-create something like this: https://exopriors.com/scry. The result is not super useful but still really impressive and good studying material.
+# Disclaimer
+
+Absolutely everything in this project was created by an coding agent, including the prompt in creation_prompt.md, which it outputted after I asked it for a prompt to re-create something like this: https://exopriors.com/scry. The result is not super useful but still really impressive and interesting study material.
+
+Machine-made content starting...
+
+---- 
 
 # Document Search System
 
