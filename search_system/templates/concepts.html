@@ -1,0 +1,267 @@
+{% extends "base.html" %} {% block title %}Concept Search - DocSearch{% endblock
+%} {% block content %}
+<div x-data="conceptsApp()">
+    <h1 class="text-2xl font-bold mb-6">Concept Vector Search</h1>
+
+    <!-- Concept Mixer -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Build Concept Mix</h2>
+
+        <!-- Add Concept -->
+        <div class="flex gap-4 mb-4">
+            <select
+                x-model="selectedConcept"
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg"
+            >
+                <option value="">Select a concept...</option>
+                {% for concept in concepts %}
+                <option value="{{ concept.name }}">{{ concept.name }}</option>
+                {% endfor %}
+            </select>
+            <input
+                type="number"
+                x-model.number="selectedWeight"
+                step="0.1"
+                min="-1"
+                max="1"
+                class="w-24 px-4 py-2 border border-gray-300 rounded-lg"
+            >
+            <button
+                @click="addConcept()"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+            >
+                Add
+            </button>
+        </div>
+
+        <!-- Active Concepts -->
+        <div class="space-y-2 mb-4">
+            <template x-for="(weight, name) in conceptMix" :key="name">
+                <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                    <span class="font-medium w-32" x-text="name"></span>
+                    <input
+                        type="range"
+                        x-model.number="conceptMix[name]"
+                        min="-1"
+                        max="1"
+                        step="0.1"
+                        class="flex-1"
+                    >
+                    <span
+                        class="w-16 text-center mono"
+                        x-text="conceptMix[name].toFixed(1)"
+                    ></span>
+                    <button
+                        @click="removeConcept(name)"
+                        class="text-red-600 hover:text-red-800"
+                    >
+                        ×
+                    </button>
+                </div>
+            </template>
+        </div>
+
+        <!-- Vector Operation Preview -->
+        <template x-if="Object.keys(conceptMix).length > 0">
+            <div
+                class="p-3 bg-gray-800 text-gray-100 rounded-lg mono text-sm mb-4"
+            >
+                <span class="text-gray-400">Vector: </span>
+                <template x-for="(weight, name, index) in conceptMix">
+                    <span>
+                        <span x-show="index > 0 && weight >= 0"> + </span>
+                        <span x-show="index > 0 && weight < 0"> - </span>
+                        <span x-show="index === 0 && weight < 0">-</span>
+                        <span
+                            class="text-yellow-400"
+                            x-text="Math.abs(weight).toFixed(1)"
+                        ></span>
+                        <span class="text-green-400" x-text="'×' + name"></span>
+                    </span>
+                </template>
+            </div>
+        </template>
+
+        <div class="flex gap-4">
+            <button
+                @click="searchConcepts()"
+                :disabled="Object.keys(conceptMix).length === 0"
+                class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+                Search with Mix
+            </button>
+            <button
+                @click="conceptMix = {}"
+                class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300"
+            >
+                Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Debias Section -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4">Debias Search</h2>
+        <p class="text-gray-600 text-sm mb-4">
+            Search for one concept while removing overlap with another (e.g.,
+            "humble tone" - "humility topic")
+        </p>
+
+        <div class="flex gap-4 mb-4">
+            <div class="flex-1">
+                <label class="block text-sm text-gray-600 mb-1"
+                >Main Concept</label>
+                <select
+                    x-model="debiasMain"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                >
+                    <option value="">Select...</option>
+                    {% for concept in concepts %}
+                    <option value="{{ concept.name }}">
+                        {{ concept.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex-1">
+                <label class="block text-sm text-gray-600 mb-1"
+                >Remove Concept</label>
+                <select
+                    x-model="debiasRemove"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                >
+                    <option value="">Select...</option>
+                    {% for concept in concepts %}
+                    <option value="{{ concept.name }}">
+                        {{ concept.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button
+                    @click="searchDebias()"
+                    :disabled="!debiasMain || !debiasRemove"
+                    class="px-6 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50"
+                >
+                    Debias Search
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution Details -->
+    <template x-if="executionDetails">
+        <div class="bg-gray-800 text-gray-100 rounded-lg p-4 mb-6 mono text-sm">
+            <div class="flex gap-6">
+                <span>Mode: <span
+                        class="text-green-400"
+                        x-text="executionDetails.mode"
+                    ></span></span>
+                <span>Time: <span
+                        class="text-yellow-400"
+                        x-text="executionDetails.processing_time_ms + 'ms'"
+                    ></span></span>
+                <span>Results: <span
+                        class="text-blue-400"
+                        x-text="executionDetails.returned + '/' + executionDetails.total_candidates"
+                    ></span></span>
+            </div>
+            <div class="mt-2 text-gray-400">
+                <template x-for="op in executionDetails.operations">
+                    <span class="mr-3" x-text="'→ ' + op"></span>
+                </template>
+            </div>
+        </div>
+    </template>
+
+    <!-- Results -->
+    <div class="space-y-4">
+        <template x-for="doc in results" :key="doc.id">
+            <div
+                class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md transition"
+            >
+                <h3
+                    class="text-lg font-semibold text-gray-900 mb-2"
+                    x-text="doc.title"
+                >
+                </h3>
+                <p
+                    class="text-gray-600 text-sm mb-3 line-clamp-3"
+                    x-text="doc.snippet"
+                >
+                </p>
+                <div class="flex items-center gap-4 text-xs text-gray-500">
+                    <span>📄 <span
+                            x-text="doc.filepath.split('/').pop()"
+                        ></span></span>
+                    <span class="text-blue-600 font-medium">⭐ Score: <span
+                            x-text="doc.score"
+                        ></span></span>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+    function conceptsApp() {
+        return {
+            conceptMix: {},
+            selectedConcept: "",
+            selectedWeight: 1.0,
+
+            debiasMain: "",
+            debiasRemove: "",
+
+            results: [],
+            executionDetails: null,
+
+            addConcept() {
+                if (!this.selectedConcept) return;
+                this.conceptMix[this.selectedConcept] =
+                    this.selectedWeight;
+                this.selectedConcept = "";
+                this.selectedWeight = 1.0;
+            },
+
+            removeConcept(name) {
+                delete this.conceptMix[name];
+            },
+
+            async searchConcepts() {
+                const res = await fetch("/api/search", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        mode: "concept",
+                        concept_mix: this.conceptMix,
+                        limit: 20,
+                    }),
+                });
+
+                const data = await res.json();
+                this.results = data.results || [];
+                this.executionDetails = data.execution_details;
+            },
+
+            async searchDebias() {
+                const res = await fetch("/api/search", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        mode: "debias",
+                        main_concept: this.debiasMain,
+                        remove_concept: this.debiasRemove,
+                        limit: 20,
+                    }),
+                });
+
+                const data = await res.json();
+                this.results = data.results || [];
+                this.executionDetails = data.execution_details;
+            },
+        };
+    }
+</script>
+{% endblock %}

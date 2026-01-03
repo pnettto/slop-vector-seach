@@ -1,0 +1,199 @@
+{% extends "base.html" %} {% block title %}Search Documents{% endblock %} {%
+block content %}
+<div x-data="searchApp()" x-init="init()">
+    <!-- Search Form -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div class="mb-4">
+            <input
+                type="text"
+                x-model="query"
+                @keyup.enter="search()"
+                placeholder="Search documents..."
+                class="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+        </div>
+
+        <div class="flex flex-wrap items-center gap-4 mb-4">
+            <div class="flex gap-2">
+                <template x-for="m in ['keyword', 'semantic', 'hybrid']">
+                    <button
+                        @click="mode = m"
+                        :class="mode === m ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+                        class="px-4 py-2 rounded-lg text-sm font-medium transition"
+                        x-text="m.charAt(0).toUpperCase() + m.slice(1)"
+                    >
+                    </button>
+                </template>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-gray-600">Results:</label>
+                <select
+                    x-model.number="limit"
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                </select>
+            </div>
+
+            <button
+                @click="search()"
+                :disabled="loading"
+                class="ml-auto px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+                <span x-show="!loading">Search</span>
+                <span x-show="loading">Searching...</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Execution Details -->
+    <template x-if="executionDetails">
+        <div class="bg-gray-800 text-gray-100 rounded-lg p-4 mb-6 mono text-sm">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400">Execution Details</span>
+                <button
+                    @click="showDetails = !showDetails"
+                    class="text-blue-400 hover:text-blue-300"
+                >
+                    <span x-text="showDetails ? 'Hide' : 'Show'"></span>
+                </button>
+            </div>
+            <div class="flex gap-6 text-xs">
+                <span>Mode: <span
+                        class="text-green-400"
+                        x-text="executionDetails.mode"
+                    ></span></span>
+                <span>Time: <span
+                        class="text-yellow-400"
+                        x-text="executionDetails.processing_time_ms + 'ms'"
+                    ></span></span>
+                <span>Results: <span
+                        class="text-blue-400"
+                        x-text="executionDetails.returned + '/' + executionDetails.total_candidates"
+                    ></span></span>
+            </div>
+            <div
+                x-show="showDetails"
+                x-cloak
+                class="mt-3 pt-3 border-t border-gray-700"
+            >
+                <div class="text-gray-400 mb-1">Operations:</div>
+                <template x-for="op in executionDetails.operations">
+                    <div class="text-green-300" x-text="'→ ' + op"></div>
+                </template>
+            </div>
+        </div>
+    </template>
+
+    <!-- Results -->
+    <div class="space-y-4">
+        <template x-if="results.length === 0 && searched">
+            <div
+                class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center text-gray-500"
+            >
+                No results found
+            </div>
+        </template>
+
+        <template x-for="doc in results" :key="doc.id">
+            <div
+                class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md transition"
+            >
+                <h3
+                    class="text-lg font-semibold text-gray-900 mb-2"
+                    x-text="doc.title"
+                >
+                </h3>
+                <p
+                    class="text-gray-600 text-sm mb-3 line-clamp-3"
+                    x-text="doc.snippet"
+                >
+                </p>
+                <div class="flex items-center gap-4 text-xs text-gray-500">
+                    <span class="flex items-center gap-1">
+                        📄 <span x-text="doc.filepath.split('/').pop()"></span>
+                    </span>
+                    <span class="flex items-center gap-1">
+                        📅 <span
+                            x-text="doc.modified_at?.split('T')[0] || 'N/A'"
+                        ></span>
+                    </span>
+                    <span
+                        class="flex items-center gap-1 text-blue-600 font-medium"
+                    >
+                        ⭐ <span x-text="'Score: ' + doc.score"></span>
+                    </span>
+                    <template x-if="doc.bm25_score !== undefined">
+                        <span class="text-gray-400">
+                            (BM25: <span x-text="doc.bm25_score"></span>, Sem:
+                            <span x-text="doc.semantic_score"></span>)
+                        </span>
+                    </template>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- Stats Footer -->
+    <div class="mt-8 text-center text-sm text-gray-500">
+        {{ stats.document_count }} documents indexed • {{ stats.embedding_count
+        }} embeddings
+    </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+    function searchApp() {
+        return {
+            query: "",
+            mode: "hybrid",
+            limit: 20,
+            loading: false,
+            results: [],
+            executionDetails: null,
+            showDetails: false,
+            searched: false,
+
+            init() {
+                // Check URL params
+                const params = new URLSearchParams(
+                    window.location.search,
+                );
+                if (params.get("q")) {
+                    this.query = params.get("q");
+                    this.search();
+                }
+            },
+
+            async search() {
+                if (!this.query.trim()) return;
+
+                this.loading = true;
+                this.searched = true;
+
+                try {
+                    const res = await fetch("/api/search", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            query: this.query,
+                            mode: this.mode,
+                            limit: this.limit,
+                        }),
+                    });
+
+                    const data = await res.json();
+                    this.results = data.results || [];
+                    this.executionDetails = data.execution_details;
+                } catch (err) {
+                    console.error(err);
+                } finally {
+                    this.loading = false;
+                }
+            },
+        };
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+services:
+  search:
+    build: .
+    ports:
+      - "5005:5000"
+    env_file:
+      - .env
+    volumes:
+      - ./documents:/app/documents
+      - ./data:/app/data
+    environment:
+      - DOCUMENTS_FOLDER=/app/documents
+      - DATABASE_PATH=/app/data/search.db
+    restart: unless-stopped
